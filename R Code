@@ -1,0 +1,237 @@
+library(tidyverse)
+hfi <- read_csv("hfi.csv")
+library(car)
+head(hfi)
+
+# cut down to the explanatory variables that I might use when modeling
+freedom<-hfi%>%
+  filter(year%in%'2016')%>%
+  select(countries, region, hf_rank, pf_rol, pf_ss, 
+         pf_movement, pf_religion, pf_association, pf_expression,
+         pf_identity, ef_government, ef_legal, ef_money, 
+         ef_trade, ef_regulation)
+
+attach(freedom)
+
+# remove any data with an NA 
+freedom<-na.omit(freedom)
+
+na<-sum(is.na(freedom))#making sure there aren't any further NAs
+
+# explore the data through density plots
+
+lattice::densityplot(~pf_rol, data = freedom,
+                     main = "Rule of Law") #fine
+
+lattice::densityplot(~pf_religion, data = freedom,
+                     main = "Religion") #might be one outlier
+
+lattice::densityplot(~hf_rank, data = freedom,
+                     main = "Human Freedom Rank") #fine
+
+lattice::densityplot(~pf_ss, data = freedom,
+                     main = "Security & Safety") #left-skewed but don't think
+# transformation is needed
+
+lattice::densityplot(~pf_movement, data = freedom,
+                     main = "Movement") #left-skewed, but still don't think I 
+# need to transform
+
+lattice::densityplot(~pf_association, data = freedom,
+                     main = "Association, Assembly, & Civil Society") #left 
+# skewed but same as above
+
+lattice::densityplot(~pf_expression, data = freedom,
+                     main = "Expression & Information") #left skewed but same as
+#above
+
+lattice::densityplot(~pf_identity, data = freedom,
+                     main = "Identity & Relationships") #same as above
+
+lattice::densityplot(~ef_government, data = freedom,
+                     main = "Size of Government") #fine
+
+lattice::densityplot(~ef_legal, data = freedom,
+                     main = "Legal System & Property Rights") #fine
+
+lattice::densityplot(~ef_money, data = freedom,
+                     main = "Access to Sound Money") #one outlier & left-skewed,
+#might remove the outlier but skewness is fine
+
+lattice::densityplot(~ef_trade, data = freedom,
+                     main = "Freedom to Trade Internationally") #bit left-skewed
+#but fine
+
+lattice::densityplot(~ef_regulation, data = freedom,
+                     main = "Regulation of Credit, Labor, & Business") #one
+#outlier, will remove
+
+#removing the outliers in Religion, Money, & Regulation
+index<-freedom%>%filter(pf_religion>0 & ef_money>2 & ef_regulation>3)
+
+#running all the density plots again absent outliers
+
+lattice::densityplot(~pf_rol, data = index,
+                     main = "Rule of Law")
+
+lattice::densityplot(~pf_religion, data = index,
+                     main = "Religion") 
+
+lattice::densityplot(~hf_rank, data = index,
+                     main = "Human Freedom Rank") 
+
+lattice::densityplot(~pf_ss, data = index,
+                     main = "Security & Safety") 
+
+lattice::densityplot(~pf_movement, data = index,
+                     main = "Movement") 
+
+lattice::densityplot(~pf_association, data = index,
+                     main = "Association, Assembly, & Civil Society") 
+
+lattice::densityplot(~pf_expression, data = index,
+                     main = "Expression & Information") 
+
+lattice::densityplot(~pf_identity, data = index,
+                     main = "Identity & Relationships") 
+
+lattice::densityplot(~ef_government, data = index,
+                     main = "Size of Government") 
+
+lattice::densityplot(~ef_legal, data = index,
+                     main = "Legal System & Property Rights") 
+
+lattice::densityplot(~ef_money, data = index,
+                     main = "Access to Sound Money") 
+
+lattice::densityplot(~ef_trade, data = index,
+                     main = "Freedom to Trade Internationally") 
+
+lattice::densityplot(~ef_regulation, data = index,
+                     main = "Regulation of Credit, Labor, & Business")
+
+#showing a table of the data
+head(index)
+
+#start mixing/matching models
+#3 total models: one with all variables, one with just personal freedom 
+#                variables, & one with just economic freedom variables
+
+model1 = lm(hf_rank~pf_rol+pf_ss+pf_movement+pf_religion+pf_association+
+              pf_identity+ef_government+ef_legal+ef_money+ef_trade+
+              ef_regulation, data = index) #all variables
+
+model2 = lm(hf_rank~pf_rol+pf_ss+pf_movement+pf_religion+pf_association+
+              pf_identity, data = index) #personal freedom variables
+
+model3 = lm(hf_rank~ef_government+ef_legal+ef_money+ef_trade+ef_regulation, 
+            data = index) #economic freedom variables
+
+AIC(model1, model2, model3) #1 is the best but that's to be expected. 2 better
+#than 3
+
+#check for multicollinearity
+car::vif(model1) #pf_rol and ef_legal look to be very related
+car::vif(model2) #great
+car::vif(model3) #little bit of collinearity between ef_legal and ef_trade but 
+#probably fine
+
+#create a multicollinearity matrix
+matrix<-index%>%select(pf_rol, pf_ss, 
+                       pf_movement, pf_religion, pf_association, pf_expression,
+                       pf_identity, ef_government, ef_legal, ef_money, 
+                       ef_trade, ef_regulation)
+
+car::scatterplotMatrix(matrix) #only bad multicollinearity between pf_rol & 
+#ef_legal
+
+#create a model without ef_legal
+model4 = lm(hf_rank~pf_rol+pf_ss+pf_movement+pf_religion+pf_association+
+              pf_identity+ef_government+ef_money+ef_trade+
+              ef_regulation, data = index)
+
+AIC(model1, model2, model3, model4) #very similar to original model
+
+#run a summary to see what variables should be excluded
+summary(model4) #all significant but I think I can remove pf_religion and 
+#ef_trade
+
+#create a model without ef_legal, pf_religion, pf_rol, ef_government, ef_trade,
+#   & pf_identity. Tested several variables with this model to see which ones 
+#   had the smallest effect on model AIC.
+model5 = lm(hf_rank~pf_ss+pf_association+
+              pf_movement+ef_money+
+              ef_regulation, data = index)
+
+AIC(model1, model2, model3, model4, model5) #very good
+
+#do I need to cut any more variables out?
+vif(model5)
+summary(model5) #nope this is good!
+
+#assessment plots to see if the model satisfies the conditions of inference
+plot(best$fitted.values, best$residuals,
+     xlab = "Fitted Values", 
+     ylab = "Residuals",
+     main = "Scatterplot of Model Fitted Values versus Residuals")
+abline(h=0)
+
+qqnorm(best$residuals,
+       x = "Residuals",
+       main = "Quantile-Quantile of Model Residuals")
+
+lattice::densityplot(~best$residuals, data = freedom,
+                     main = "Model Residuals",
+                     xlab = "Residuals") #fine
+
+
+#let's run an F-test
+best<-model5 #changing the name of the model
+anova(best)
+
+#create confidence & prediction intervals using averages of each indicator
+attach(index)
+average<-data.frame(pf_ss=mean(pf_ss),
+                    pf_association=mean(pf_association),
+                    pf_movement=mean(pf_movement),
+                    ef_money=mean(ef_money),
+                    ef_regulation=mean(ef_regulation))
+
+predict(best, 
+        average, 
+        int = "confidence") #95% Confidence Interval
+
+predict(best, 
+        average, 
+        int = "prediction") #95% Prediction Interval
+
+
+#quickly check to see if logarithmically-transforming the RV will change the 
+#  data distribution form
+
+matrix<-transform(matrix, logFreedom = log(hf_rank))
+
+lattice::densityplot(~hf_rank, data = matrix,
+                     main = "Log of Human Freedom Rank") 
+
+logmodel = lm(logFreedom~pf_ss+pf_association+
+              pf_movement+ef_money+
+              ef_regulation, data = matrix)
+
+#assessment plots to see if the logmodel satisfies the conditions of inference
+plot(logmodel$fitted.values, logmodel$residuals,
+     xlab = "Fitted Values", 
+     ylab = "Residuals",
+     main = "Scatterplot of Log Model Fitted Values versus Residuals")
+abline(h=0)
+
+qqnorm(logmodel$residuals,
+       x = "Residuals",
+       main = "Quantile-Quantile of Model Residuals")
+
+lattice::densityplot(~logmodel$residuals, data = matrix,
+                     main = "Log Model Residuals",
+                     xlab = "Residuals") #bad
+
+#conditions of inference look considerably worse than the non-transformed model,
+#  so we're not going to change it
